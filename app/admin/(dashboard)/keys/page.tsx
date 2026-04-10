@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { Trash2 } from "lucide-react";
 /** Matches `prisma.user.findMany({ select: { email: true, studyId: true } })` */
 type UserStudyRow = { email: string; studyId: string | null };
@@ -5,6 +7,7 @@ import { deleteStudyKey, generateStudyKey } from "@/actions/admin";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminKeysPage() {
+// ... rest of file unchanged
   const [keys, usersWithStudy] = await Promise.all([
     prisma.studyKey.findMany({
       orderBy: { createdAt: "desc" },
