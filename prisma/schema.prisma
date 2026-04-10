@@ -1,0 +1,76 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // URL has been moved to prisma.config.ts to comply with Prisma 7
+}
+
+enum Role {
+  ADMIN
+  PARTICIPANT
+}
+
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  password    String       // Hashed password
+  role        Role         @default(PARTICIPANT)
+  studyId     String?      @unique // The "Key" assigned to them
+  createdAt   DateTime     @default(now())
+  reflections Reflection[]
+  checkInSubmissions CheckInSubmission[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model StudyKey {
+  id        String   @id @default(cuid())
+  key       String   @unique // The unique string (e.g., AIDES-123)
+  isUsed    Boolean  @default(false)
+  createdBy String?  // Reference to the Admin who made it
+  createdAt DateTime @default(now())
+}
+
+model Reflection {
+  id        String     @id @default(cuid())
+  content   String     @db.Text
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  createdAt DateTime   @default(now())
+}
+
+model CheckInSubmission {
+  id                      String   @id @default(cuid())
+  userId                  String
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  domain                   String
+  subscale                 String
+  distress                 Int
+  mood                     Int?
+  energy                   Int?
+  reflection               String   @db.Text
+  copingAction             String?  @db.Text
+  contextTags              Json
+
+  needsSafetyEscalation   Boolean  @default(false)
+  previousDayDistress     Int?
+  consecutiveHighDistressDays Int
+
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}

@@ -1,0 +1,130 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useConversation } from '@elevenlabs/react';
+import { useAudioAnalyser } from '../../hooks/useAudioAnalyser';   // Path to the hook we created
+import VoicePulseCircle from './VoicePulseCircle'; // Path to the animation component
+
+export function StampleyVoiceAgent() {
+  const [showSafetyModal, setShowSafetyModal] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  const conversation = useConversation({
+    onConnect: () => {
+      setConnectionError(null);
+      console.log('Connection Successful');
+    },
+    onDisconnect: () => console.log('Stampley is offline'),
+    onMessage: (message) => console.log('User said:', message),
+    onError: (err) => console.error('Error:', err),
+    
+    // Safety Tool Integration
+    clientTools: {
+      trigger_safety_alert: (parameters: { reason: string }) => {
+        console.warn("Safety Alert Triggered:", parameters.reason);
+        setShowSafetyModal(true);
+        return "Safety alert activated. Support protocols initiated."; 
+      },
+    },
+  });
+
+  const isSessionActive = conversation.status === 'connected';
+  
+  // PULSE LOGIC: Only analyze audio if the session is active 
+  // and Stampley is NOT speaking (meaning it's the user's turn)
+  const isUserSpeaking = isSessionActive && !conversation.isSpeaking;
+  const volume = useAudioAnalyser(isUserSpeaking);
+
+  const startStampley = async () => {
+    setConnectionError(null);
+    setIsConnecting(true);
+    try {
+      const authResponse = await fetch('/api/get-signed-url', { method: 'GET' });
+      const data = await authResponse.json().catch(() => ({}));
+
+      if (!authResponse.ok) {
+        const message = (data?.message ?? data?.error ?? 'Could not get voice connection.') as string;
+        setConnectionError(message);
+        console.error('Get signed URL failed:', authResponse.status, data);
+        return;
+      }
+
+      const signedUrl = data?.signed_url ?? data?.signedUrl;
+      if (!signedUrl || typeof signedUrl !== 'string') {
+        const msg = 'Invalid response from server (no signed URL).';
+        setConnectionError(msg);
+        console.error(msg, data);
+        return;
+      }
+
+      await conversation.startSession({ signedUrl });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not start conversation';
+      setConnectionError(message);
+      console.error('Could not start conversation', error);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-6 p-6 w-full">
+   
+      {/* THE PULSE VISUALIZER */}
+      <div className="py-8 ">
+        <VoicePulseCircle 
+          volume={volume} 
+          isListening={isUserSpeaking} 
+        />
+        {/* Secondary status text inside the visual area */}
+        <div className="text-center mt-4">
+          <p className="text-xs font-medium uppercase tracking-widest text-gray-400">
+            {conversation.isSpeaking ? "Stampley is speaking..." : isUserSpeaking ? "Listening to you..." : "Ready"}
+          </p>
+        </div>
+      </div>
+
+      <button
+        onClick={isSessionActive ? () => conversation.endSession() : startStampley}
+        disabled={isConnecting}
+        className={`px-8 py-3 rounded-full font-bold transition-all transform active:scale-95 shadow-lg disabled:opacity-70 disabled:cursor-not-allowed ${
+          isSessionActive 
+            ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+            : 'bg-blue-600 text-white hover:bg-blue-700'
+        }`}
+      >
+        {isSessionActive ? 'End Check-in' : isConnecting ? 'Connecting...' : 'Start Check-in'}
+      </button>
+
+      {connectionError && (
+        <p className="text-sm text-red-600 max-w-md text-center" role="alert">
+          {connectionError}
+        </p>
+      )}
+      
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${isSessionActive ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+        <p className="text-sm text-gray-500 capitalize">{conversation.status}</p>
+      </div>
+
+      {/* SAFETY ESCALATION MODAL */}
+      {showSafetyModal && (
+        <div className="fixed inset-0 bg-red-600 flex items-center justify-center z-[100] p-6 text-white">
+          <div className="max-w-md text-center">
+            <h2 className="text-3xl font-bold mb-4">You're not alone.</h2>
+            <p className="mb-8 text-lg">We've noticed you might be having a very tough time. Please reach out for immediate support.</p>
+            <div className="flex flex-col gap-4">
+              <a href="tel:6172874067" className="bg-white text-red-600 font-bold py-4 rounded-xl shadow-xl">
+                Call Study Team: 617-287-4067
+              </a>
+              <button onClick={() => setShowSafetyModal(false)} className="text-white/80 underline text-sm">
+                Return to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
