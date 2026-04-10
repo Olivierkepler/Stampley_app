@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { createManualUser, updateUserRole } from "@/actions/users";
 import { prisma } from "@/lib/prisma";
 import { AddUserSection } from "./add-user-collapsible";
