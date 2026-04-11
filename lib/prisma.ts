@@ -20,18 +20,20 @@ const globalForPrisma = globalThis as unknown as {
  * Also strip `sslmode` from the URL: recent `pg` / `pg-connection-string` treats
  * `sslmode=require` like `verify-full`, which can cause TLS errors without the CA.
  */
+/** Remove `sslmode` from the query string without re-encoding (safer than URLSearchParams for odd passwords). */
+function stripSslModeQueryParam(dsn: string): string {
+  return dsn
+    .replace(/([?&])sslmode=[^&#]*/gi, "$1")
+    .replace(/\?&+/g, "?")
+    .replace(/&&+/g, "&")
+    .replace(/[?&]$/g, "");
+}
+
 function prepareConnectionString(raw: string): string {
   const dsn = raw.trim();
   if (!dsn.includes("rds.amazonaws.com")) return dsn;
-
-  const q = dsn.indexOf("?");
-  if (q === -1) return dsn;
-
-  const base = dsn.slice(0, q);
-  const params = new URLSearchParams(dsn.slice(q + 1));
-  params.delete("sslmode");
-  const rest = params.toString();
-  return rest ? `${base}?${rest}` : base;
+  if (!/[?&]sslmode=/i.test(dsn)) return dsn;
+  return stripSslModeQueryParam(dsn);
 }
 
 function buildPoolConfig(): PoolConfig {

@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /** Helps Prisma + pg + adapter resolve correctly in serverless bundles (e.g. Amplify). */
+  serverExternalPackages: [
+    "@prisma/client",
+    "@prisma/adapter-pg",
+    "prisma",
+    "pg",
+  ],
+
   // Redirect legacy step paths and root shorthand to current check-in step routes
   async redirects() {
     return [

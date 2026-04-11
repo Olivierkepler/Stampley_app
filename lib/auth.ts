@@ -2,7 +2,13 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { baseAuthConfig, resolveAuthSecret } from "./auth.config";
-import { prisma } from "./prisma";
+
+/**
+ * Do not import `./prisma` at module scope: loading Prisma/pg on every auth route
+ * (e.g. GET /api/auth/session, /api/auth/providers) can throw on Amplify if the DB
+ * pool or TLS misconfigures before credentials sign-in. Prisma is loaded only
+ * inside `authorize`.
+ */
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...baseAuthConfig,
@@ -23,6 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!email || !password) return null;
 
         try {
+          const { prisma } = await import("./prisma");
           const user = await prisma.user.findFirst({
             where: {
               email: { equals: email, mode: "insensitive" },
