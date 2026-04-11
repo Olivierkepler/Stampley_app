@@ -1,7 +1,10 @@
 /**
- * NextAuth may put `callbackUrl` on /login after a failed auth redirect.
- * If it points at another origin (e.g. localhost from a dev build), strip it
- * so post-login navigation stays on the current deployment.
+ * `sanitizeAuthCallbackUrl(raw, currentOrigin)`
+ *
+ * Used when NextAuth adds `callbackUrl` on `/login`. If `raw` is an absolute URL
+ * whose origin differs from `currentOrigin` (e.g. `https://localhost:3000/...`),
+ * return `null` so the caller can strip it. Same-origin absolutes become a path.
+ * Relative paths starting with `/` are returned as-is.
  */
 export function sanitizeAuthCallbackUrl(
   raw: string | null,

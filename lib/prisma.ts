@@ -10,14 +10,15 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * AWS RDS: TLS is enabled via the Pool `ssl` option below.
+ * AWS RDS (`DATABASE_URL` contains `rds.amazonaws.com`):
+ * - Enable TLS via Pool `ssl` (see `buildPoolConfig` below).
+ * - Default: `ssl: { rejectUnauthorized: false }` so Node accepts the RDS chain
+ *   without bundling the Amazon RDS CA (typical for Amplify / serverless).
+ * - Set `DATABASE_SSL_REJECT_UNAUTHORIZED=true` only after you configure strict
+ *   certificate verification (RDS CA bundle).
  *
- * Do **not** leave `sslmode=require` in the URL on recent `pg` / `pg-connection-string`:
- * those treat `require` like `verify-full`, which fails with
- * "self-signed certificate in certificate chain" unless you install the RDS CA.
- * Stripping `sslmode` lets `ssl: { rejectUnauthorized: false }` apply.
- *
- * Set `DATABASE_SSL_REJECT_UNAUTHORIZED=true` only after you configure the RDS CA bundle.
+ * Also strip `sslmode` from the URL: recent `pg` / `pg-connection-string` treats
+ * `sslmode=require` like `verify-full`, which can cause TLS errors without the CA.
  */
 function prepareConnectionString(raw: string): string {
   const dsn = raw.trim();
@@ -41,6 +42,10 @@ function buildPoolConfig(): PoolConfig {
   const connectionString = prepareConnectionString(raw);
   const isRds = raw.includes("rds.amazonaws.com");
 
+  /** `false` unless `DATABASE_SSL_REJECT_UNAUTHORIZED` is exactly `"true"`. */
+  const rejectUnauthorized =
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true";
+
   return {
     connectionString,
     max: Number(process.env.DATABASE_POOL_MAX ?? 10),
@@ -48,8 +53,8 @@ function buildPoolConfig(): PoolConfig {
     ...(isRds
       ? {
           ssl: {
-            rejectUnauthorized:
-              process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true",
+            // RDS: default is do not reject (equivalent to rejectUnauthorized: false)
+            rejectUnauthorized,
           },
         }
       : {}),
