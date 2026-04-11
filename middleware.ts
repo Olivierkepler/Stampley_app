@@ -1,14 +1,11 @@
-import NextAuth from "next-auth";
-import { baseAuthConfig, resolveAuthSecret } from "@/lib/auth.config";
+/**
+ * Edge runtime: imports only `@/lib/auth.config` (no `@/lib/auth`, no `@/lib/prisma`).
+ * JWT verification uses `edgeAuth` from that module; credentials live in Node API routes.
+ */
+import { edgeAuth } from "@/lib/auth.config";
 
-const { auth } = NextAuth({
-  ...baseAuthConfig,
-  secret: resolveAuthSecret(),
-  providers: [],
-});
-
-export const middleware = auth;
-export default auth;
+export const middleware = edgeAuth;
+export default edgeAuth;
 
 export const config = {
   matcher: [

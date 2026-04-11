@@ -1,6 +1,12 @@
+import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
-import type { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
+
+/**
+ * Same values as Prisma `Role`, without importing `@prisma/client`
+ * (keeps Edge middleware free of the Prisma engine).
+ */
+export type AuthRole = "ADMIN" | "PARTICIPANT";
 
 /**
  * Auth.js reads `AUTH_URL` for absolute URLs / CSRF in some deployments.
@@ -41,7 +47,7 @@ function adminEmailAllowlist(): Set<string> {
 
 export function canAccessAdminRoutes(
   email: string | null | undefined,
-  role: Role | string | undefined
+  role: AuthRole | string | undefined
 ) {
   if (String(role) === "ADMIN") return true;
   const normalized = email?.trim().toLowerCase();
@@ -113,7 +119,7 @@ export const baseAuthConfig = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.sub ?? token.id) as string;
-        session.user.role = token.role as Role;
+        session.user.role = token.role as AuthRole;
         if (typeof token.email === "string") {
           session.user.email = token.email;
         }
@@ -122,3 +128,13 @@ export const baseAuthConfig = {
     },
   },
 } satisfies Omit<NextAuthConfig, "providers" | "secret">;
+
+/**
+ * JWT session check for Edge middleware only (no Credentials / Prisma / bcrypt).
+ * `lib/auth.ts` composes the full app Auth.js instance with the Credentials provider.
+ */
+export const { auth: edgeAuth } = NextAuth({
+  ...baseAuthConfig,
+  secret: resolveAuthSecret(),
+  providers: [],
+});
