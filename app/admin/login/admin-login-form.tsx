@@ -2,7 +2,6 @@
 
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Image from "next/image";
 
@@ -10,22 +9,21 @@ export function AdminLoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const router = useRouter();
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email");
-    const password = formData.get("password");
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
 
     try {
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
+        callbackUrl: "/admin/keys",
       });
 
       if (result?.error) {
@@ -34,8 +32,8 @@ export function AdminLoginForm() {
         return;
       }
 
-      router.push("/admin/keys");
-      router.refresh();
+      // Full navigation so the session cookie is always applied before admin middleware runs.
+      window.location.assign("/admin/keys");
     } catch {
       setError("An unexpected error occurred.");
       setIsLoading(false);

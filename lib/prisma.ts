@@ -10,23 +10,27 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * AWS RDS (and many managed Postgres hosts) require TLS. The `pg` driver does
- * not always infer SSL from the connection string alone; missing TLS can
- * surface as connection failures or, in some setups, Prisma P1010 ("denied
- * access on the database") when the server rejects the session.
+ * AWS RDS: TLS is enabled via the Pool `ssl` option below.
  *
- * Append `sslmode=require` when missing, and pass explicit `ssl` for RDS hosts.
- * Set `DATABASE_SSL_REJECT_UNAUTHORIZED=true` after configuring the RDS CA
- * bundle for strict certificate verification.
+ * Do **not** leave `sslmode=require` in the URL on recent `pg` / `pg-connection-string`:
+ * those treat `require` like `verify-full`, which fails with
+ * "self-signed certificate in certificate chain" unless you install the RDS CA.
+ * Stripping `sslmode` lets `ssl: { rejectUnauthorized: false }` apply.
+ *
+ * Set `DATABASE_SSL_REJECT_UNAUTHORIZED=true` only after you configure the RDS CA bundle.
  */
 function prepareConnectionString(raw: string): string {
-  const trimmed = raw.trim();
-  const isRds = trimmed.includes("rds.amazonaws.com");
-  if (!isRds) return trimmed;
-  if (/[?&]sslmode=/i.test(trimmed)) return trimmed;
-  return trimmed.includes("?")
-    ? `${trimmed}&sslmode=require`
-    : `${trimmed}?sslmode=require`;
+  const dsn = raw.trim();
+  if (!dsn.includes("rds.amazonaws.com")) return dsn;
+
+  const q = dsn.indexOf("?");
+  if (q === -1) return dsn;
+
+  const base = dsn.slice(0, q);
+  const params = new URLSearchParams(dsn.slice(q + 1));
+  params.delete("sslmode");
+  const rest = params.toString();
+  return rest ? `${base}?${rest}` : base;
 }
 
 function buildPoolConfig(): PoolConfig {

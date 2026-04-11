@@ -4,13 +4,19 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export async function registerWithKey(formData: FormData) {
-  const email = formData.get("email") as string;
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
   const password = formData.get("password") as string;
-  const studyId = formData.get("studyId") as string;
+  const studyId = String(formData.get("studyId") ?? "").trim();
 
   const keyRecord = await prisma.studyKey.findUnique({
     where: { key: studyId },
   });
+
+  if (!email || !password || !studyId) {
+    return { error: "Please fill in all fields." };
+  }
 
   if (!keyRecord || keyRecord.isUsed) {
     return { error: "This Study ID is invalid or has already been used." };

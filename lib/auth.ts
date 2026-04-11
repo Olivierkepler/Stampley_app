@@ -9,6 +9,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: resolveAuthSecret(),
   providers: [
     Credentials({
+      id: "credentials",
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
@@ -17,22 +18,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        const email = String(credentials.email).trim().toLowerCase();
+        const password = String(credentials.password);
+        if (!email || !password) return null;
+
         try {
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email as string },
+          const user = await prisma.user.findFirst({
+            where: {
+              email: { equals: email, mode: "insensitive" },
+            },
           });
 
           if (!user || !user.password) return null;
-          const isValid = await bcrypt.compare(
-            credentials.password as string,
-            user.password
-          );
+          const isValid = await bcrypt.compare(password, user.password);
 
           if (!isValid) return null;
 
           return {
             id: user.id,
-            email: user.email,
+            email: user.email?.trim().toLowerCase() ?? email,
             role: user.role,
           };
         } catch (e) {

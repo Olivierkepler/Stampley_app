@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Suspense, useState, useEffect } from "react"
 import Image from "next/image"
 
@@ -22,8 +22,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const router = useRouter()
-
   useEffect(() => { setMounted(true) }, [])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -31,18 +29,20 @@ export default function LoginPage() {
     setError(null)
     setIsLoading(true)
     const formData = new FormData(e.currentTarget)
+    const email = String(formData.get("email") ?? "").trim()
+    const password = String(formData.get("password") ?? "")
     try {
       const result = await signIn("credentials", {
-        email: formData.get("email"),
-        password: formData.get("password"),
+        email,
+        password,
         redirect: false,
+        callbackUrl: "/dashboard",
       })
       if (result?.error) {
         setError("Invalid email or password. Please try again.")
         setIsLoading(false)
       } else {
-        router.push("/dashboard")
-        router.refresh()
+        window.location.assign("/dashboard")
       }
     } catch {
       setError("An unexpected error occurred. Please try again.")

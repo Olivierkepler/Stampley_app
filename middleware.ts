@@ -11,5 +11,11 @@ export const middleware = auth;
 export default auth;
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*", "/check-in/:path*", "/check-in"],
+  matcher: [
+    "/dashboard/:path*",
+    "/admin",
+    "/admin/:path*",
+    "/check-in",
+    "/check-in/:path*",
+  ],
 };

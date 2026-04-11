@@ -3,12 +3,22 @@ import type { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 /**
+ * Auth.js reads `AUTH_URL` for absolute URLs / CSRF in some deployments.
+ * Many hosts still only set `NEXTAUTH_URL` — mirror so both are defined at runtime.
+ */
+function syncPublicAuthUrls(): void {
+  const next = process.env.NEXTAUTH_URL?.trim();
+  const auth = process.env.AUTH_URL?.trim();
+  if (next && !auth) process.env.AUTH_URL = next;
+  if (auth && !next) process.env.NEXTAUTH_URL = auth;
+}
+
+syncPublicAuthUrls();
+
+/**
  * Resolves the Auth.js / NextAuth signing secret at init time for each bundle
  * (Node API routes vs Edge middleware). Supports both v5 (`AUTH_SECRET`) and
  * legacy (`NEXTAUTH_SECRET`) env names used by many hosts including Amplify.
- *
- * In production, both must be set in the deployment environment or session
- * cookies cannot be signed and sign-in ends on `/api/auth/error`.
  */
 export function resolveAuthSecret(): string | undefined {
   const fromAuth = process.env.AUTH_SECRET?.trim();
@@ -19,27 +29,36 @@ export function resolveAuthSecret(): string | undefined {
   return "local-dev-only-auth-secret-min-32-chars!!";
 }
 
-/** Emails that may access `/admin/*` even when DB role is not ADMIN */
-const ADMIN_EMAIL_ALLOWLIST = new Set(
-  ["olivierkfrancois1@gmail.com"].map((e) => e.toLowerCase())
-);
+/** Default admin emails; extend with `ADMIN_EMAIL_ALLOWLIST` (comma-separated). */
+function adminEmailAllowlist(): Set<string> {
+  const fromEnv =
+    process.env.ADMIN_EMAIL_ALLOWLIST?.split(/[,;]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean) ?? [];
+  const defaults = ["olivierkfrancois1@gmail.com"].map((e) => e.toLowerCase());
+  return new Set([...defaults, ...fromEnv]);
+}
 
 export function canAccessAdminRoutes(
   email: string | null | undefined,
-  role: Role | undefined
+  role: Role | string | undefined
 ) {
-  if (role === "ADMIN") return true;
-  const normalized = email?.toLowerCase();
-  return !!normalized && ADMIN_EMAIL_ALLOWLIST.has(normalized);
+  if (String(role) === "ADMIN") return true;
+  const normalized = email?.trim().toLowerCase();
+  return !!normalized && adminEmailAllowlist().has(normalized);
 }
 
 /**
  * Shared Auth.js options (no `secret`, no `providers`).
- * `secret` must be passed separately so it is not flattened by `{...authConfig}`
- * when composing the Credentials provider in `lib/auth.ts`.
+ * `secret` must be passed separately when composing `NextAuth()` in `lib/auth.ts`
+ * and in `middleware.ts`.
  */
 export const baseAuthConfig = {
   trustHost: true,
+  session: {
+    strategy: "jwt" as const,
+    maxAge: 30 * 24 * 60 * 60,
+  },
   pages: {
     signIn: "/login",
   },
@@ -84,6 +103,7 @@ export const baseAuthConfig = {
     },
     async jwt({ token, user }) {
       if (user) {
+        token.sub = user.id;
         token.id = user.id;
         token.role = user.role;
         if (user.email) token.email = user.email;
@@ -92,7 +112,7 @@ export const baseAuthConfig = {
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
+        session.user.id = (token.sub ?? token.id) as string;
         session.user.role = token.role as Role;
         if (typeof token.email === "string") {
           session.user.email = token.email;
