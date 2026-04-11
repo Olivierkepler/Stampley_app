@@ -2,9 +2,10 @@
 
 import { signIn } from "next-auth/react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { Suspense, useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useState, useEffect, useLayoutEffect } from "react"
 import Image from "next/image"
+import { sanitizeAuthCallbackUrl } from "@/lib/sanitize-auth-callback"
 
 function LoginSuccessMessage() {
   const searchParams = useSearchParams()
@@ -15,6 +16,27 @@ function LoginSuccessMessage() {
       {message}
     </div>
   )
+}
+
+/** Remove cross-origin `callbackUrl` (e.g. localhost) left over from dev builds or bad links. */
+function LoginCallbackSanitizer() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  useLayoutEffect(() => {
+    const raw = searchParams.get("callbackUrl")
+    if (!raw) return
+    const safe = sanitizeAuthCallbackUrl(raw, window.location.origin)
+    if (safe !== null) return
+    const q = new URLSearchParams()
+    const message = searchParams.get("message")
+    const err = searchParams.get("error")
+    if (message) q.set("message", message)
+    if (err) q.set("error", err)
+    router.replace("/login" + (q.toString() ? `?${q}` : ""))
+  }, [searchParams, router])
+
+  return null
 }
 
 export default function LoginPage() {
@@ -302,6 +324,7 @@ export default function LoginPage() {
 
             {/* Success banner */}
             <Suspense fallback={<div className="mb-6 h-11 animate-pulse rounded-xl bg-black/[0.03]" />}>
+              <LoginCallbackSanitizer />
               <LoginSuccessMessage />
             </Suspense>
 
