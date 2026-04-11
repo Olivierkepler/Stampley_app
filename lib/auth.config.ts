@@ -3,13 +3,18 @@ import type { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 /**
- * Auth.js needs a secret to sign/encrypt JWTs. Without it, sign-in succeeds in
- * `authorize` then fails and the browser ends up on `/api/auth/error`.
- * Set `AUTH_SECRET` in `.env` (e.g. `openssl rand -base64 32`).
+ * Resolves the Auth.js / NextAuth signing secret at init time for each bundle
+ * (Node API routes vs Edge middleware). Supports both v5 (`AUTH_SECRET`) and
+ * legacy (`NEXTAUTH_SECRET`) env names used by many hosts including Amplify.
+ *
+ * In production, both must be set in the deployment environment or session
+ * cookies cannot be signed and sign-in ends on `/api/auth/error`.
  */
-function authSecret(): string | undefined {
-  const s = process.env.AUTH_SECRET?.trim();
-  if (s) return s;
+export function resolveAuthSecret(): string | undefined {
+  const fromAuth = process.env.AUTH_SECRET?.trim();
+  if (fromAuth) return fromAuth;
+  const fromLegacy = process.env.NEXTAUTH_SECRET?.trim();
+  if (fromLegacy) return fromLegacy;
   if (process.env.NODE_ENV === "production") return undefined;
   return "local-dev-only-auth-secret-min-32-chars!!";
 }
@@ -28,9 +33,13 @@ export function canAccessAdminRoutes(
   return !!normalized && ADMIN_EMAIL_ALLOWLIST.has(normalized);
 }
 
-export const authConfig = {
+/**
+ * Shared Auth.js options (no `secret`, no `providers`).
+ * `secret` must be passed separately so it is not flattened by `{...authConfig}`
+ * when composing the Credentials provider in `lib/auth.ts`.
+ */
+export const baseAuthConfig = {
   trustHost: true,
-  secret: authSecret(),
   pages: {
     signIn: "/login",
   },
@@ -92,5 +101,4 @@ export const authConfig = {
       return session;
     },
   },
-  providers: [],
-} satisfies NextAuthConfig;
+} satisfies Omit<NextAuthConfig, "providers" | "secret">;

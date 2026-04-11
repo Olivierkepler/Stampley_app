@@ -1,7 +1,11 @@
 import NextAuth from "next-auth";
-import { authConfig } from "@/lib/auth.config";
+import { baseAuthConfig, resolveAuthSecret } from "@/lib/auth.config";
 
-const { auth } = NextAuth(authConfig);
+const { auth } = NextAuth({
+  ...baseAuthConfig,
+  secret: resolveAuthSecret(),
+  providers: [],
+});
 
 export const middleware = auth;
 export default auth;
